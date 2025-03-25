@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const Razorpay = require('razorpay');
 require('dotenv').config();
+const crypto = require('crypto');
 
 const app = express();
 
@@ -63,6 +64,48 @@ app.post('/api/create-order', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error creating order',
+      error: error.message
+    });
+  }
+});
+
+// Add this after your existing endpoints
+app.post('/api/verify-payment', async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    } = req.body;
+
+    // Create a signature using the order_id and payment_id
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest("hex");
+
+    // Compare signatures
+    const isAuthentic = expectedSignature === razorpay_signature;
+
+    if (isAuthentic) {
+      // Payment is verified
+      res.json({
+        success: true,
+        message: 'Payment verified successfully',
+        orderId: razorpay_order_id,
+        paymentId: razorpay_payment_id
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Payment verification failed'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error verifying payment',
       error: error.message
     });
   }
